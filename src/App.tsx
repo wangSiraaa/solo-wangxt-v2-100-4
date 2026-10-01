@@ -11,6 +11,8 @@ function makeFormula(partial?: Partial<Formula>): Formula {
     note: "",
     variables: {},
     targetUnit: "",
+    correlations: [],
+    snapshots: [],
     createdAt: Date.now(),
     ...partial,
   };
@@ -51,7 +53,7 @@ export default function App() {
 
   const add = () => setFormulas((fs) => [...fs, makeFormula()]);
 
-  const addExample = (kind: "unit" | "degC" | "angle" | "dimErr" | "divZero") => {
+  const addExample = (kind: "unit" | "degC" | "angle" | "dimErr" | "divZero" | "forceU" | "corrU") => {
     const presets: Record<string, Formula> = {
       unit: makeFormula({
         latex: "v\\cdot t+\\frac{1}{2}a t^{2}",
@@ -100,6 +102,28 @@ export default function App() {
         },
         targetUnit: "",
       }),
+      forceU: makeFormula({
+        latex: "m\\cdot a",
+        note: "牛顿第二定律 F=m·a：质量与加速度独立测量，传播合成标准不确定度",
+        variables: {
+          m: { value: "2", unit: "kg", uncertainty: "0.01" },
+          a: { value: "3", unit: "m/s^2", uncertainty: "0.05" },
+        },
+        targetUnit: "",
+        correlations: [],
+      }),
+      corrU: makeFormula({
+        latex: "m\\cdot a",
+        note: "同源测量：为 m、a 声明相关系数后，合成不确定度与独立假设不同，但 F 仍为 6 N",
+        variables: {
+          m: { value: "2", unit: "kg", uncertainty: "0.1" },
+          a: { value: "3", unit: "m/s^2", uncertainty: "0.2" },
+        },
+        targetUnit: "",
+        correlations: [
+          { a: "m", b: "a", rho: "0.8", source: "同一台力标定台" },
+        ],
+      }),
     };
     setFormulas((fs) => [...fs, presets[kind]]);
   };
@@ -135,6 +159,8 @@ export default function App() {
           <button type="button" className="ghost" onClick={() => addExample("angle")}>示例：角度弧度</button>
           <button type="button" className="ghost" onClick={() => addExample("dimErr")}>示例：量纲错误</button>
           <button type="button" className="ghost" onClick={() => addExample("divZero")}>示例：除零</button>
+          <button type="button" className="ghost" onClick={() => addExample("forceU")}>示例：力与不确定度</button>
+          <button type="button" className="ghost" onClick={() => addExample("corrU")}>示例：同源相关</button>
           <span className="sep" />
           <button type="button" className="ghost" onClick={onExport}>导出 JSON</button>
           <button type="button" className="ghost" onClick={() => fileRef.current?.click()}>导入 JSON</button>
@@ -181,6 +207,9 @@ export default function App() {
         <p>
           红色 = 明确错误（量纲不兼容、未赋值、除零、语法错误）；橙色 = 超出首版支持范围，结果未验证。
           公式之间完全独立，一条出错不会影响其他公式。
+        </p>
+        <p>
+          测量不确定度按一阶（GUM）模型传播：变量留空 u(x) 表示「未声明」而非 0；相关关系不完整、不对称、超范围或矩阵非半正定时只标记该公式的不确定度未验证，不影响普通结果。
         </p>
       </footer>
     </div>

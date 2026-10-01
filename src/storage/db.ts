@@ -3,13 +3,21 @@ import type { Formula } from "../engine/types";
 
 const DB_NAME = "dimension-notebook";
 const STORE = "formulas";
-const VERSION = 1;
+// v1：首版（只有变量数值/单位与目标单位）
+// v2：新增变量标准不确定度（VariableDef.uncertainty）、相关关系 correlations、计算快照 snapshots
+const VERSION = 2;
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (ev) => {
       const db = req.result;
+      // v1 → v2：对象仓库结构不变（仍是整条 Formula 的 key-value 存储），
+      // 新字段在应用层做缺省兼容；旧记录读出后没有 uncertainty/correlations/snapshots，
+      // 分析时自动按“不确定度未声明”处理，旧结果照常可算。
+      if (ev.oldVersion < 1 && !db.objectStoreNames.contains(STORE)) {
+        db.createObjectStore(STORE, { keyPath: "id" });
+      }
       if (!db.objectStoreNames.contains(STORE)) {
         db.createObjectStore(STORE, { keyPath: "id" });
       }

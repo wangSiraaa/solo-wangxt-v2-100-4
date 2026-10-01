@@ -188,7 +188,7 @@ input:focus {
 }
 .var-row {
   display: grid;
-  grid-template-columns: 70px 1fr 1.2fr 34px;
+  grid-template-columns: 60px 0.9fr 1.3fr 1fr 30px;
   gap: 8px;
   align-items: center;
   padding: 6px 8px;
@@ -200,7 +200,7 @@ input:focus {
   font-size: 0.75rem;
   color: var(--muted);
 }
-.var-head span:last-child { grid-column: span 2; }
+.var-head span:last-child { grid-column: span 1; }
 .var-name {
   font-family: "Cambria Math", "Times New Roman", serif;
   font-style: italic;
@@ -310,3 +310,155 @@ math-field:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.15);
 }
+
+/* ---------- 测量不确定度 ---------- */
+.unc-mini {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.unc-mini.unc-ok { background: var(--ok-bg); color: var(--ok); }
+.unc-mini.unc-warn { background: var(--warn-bg); color: var(--warn); }
+.unc-mini.unc-muted { background: #eef0f3; color: var(--muted); }
+
+.unc-panel {
+  border-radius: 8px;
+  padding: 8px 12px;
+  width: 100%;
+}
+.unc-panel.unc-ok { background: #f3faf5; border: 1px solid #bfe6cb; }
+.unc-panel.unc-warn { background: var(--warn-bg); border: 1px solid #ecd88a; }
+.unc-panel.unc-muted { background: #f7f8fa; border: 1px solid var(--border); }
+.unc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.unc-badge {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.unc-badge.unc-ok { background: var(--ok-bg); color: var(--ok); }
+.unc-badge.unc-warn { background: #fff0c2; color: var(--warn); }
+.unc-badge.unc-muted { background: #eef0f3; color: var(--muted); }
+.unc-lines { display: flex; flex-direction: column; gap: 2px; margin: 4px 0; }
+.unc-line { display: inline-flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.unc-contrib ul, .unc-corr ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.unc-contrib li {
+  display: grid;
+  grid-template-columns: 40px 1fr 52px;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.83rem;
+}
+.bar-wrap {
+  display: inline-block;
+  background: #e9eef3;
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+}
+.bar {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+  border-radius: 4px;
+}
+.unc-corr li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-size: 0.83rem;
+}
+.unc-corr .neg { color: var(--ok); }
+.unc-issues {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.83rem;
+  color: var(--warn);
+}
+
+/* ---------- 相关关系编辑器 ---------- */
+.corr-editor {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fcfdff;
+}
+.corr-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.corr-row {
+  display: grid;
+  grid-template-columns: 90px 130px 1fr;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+}
+.corr-row.asymmetric, .corr-row.incomplete {
+  grid-template-columns: 90px 130px 1fr;
+}
+.corr-pair { font-size: 0.88rem; }
+.corr-pair i { font-family: "Cambria Math", serif; font-style: italic; }
+.corr-rho input, .corr-source input { margin-top: 0; }
+.corr-warn {
+  grid-column: 2 / -1;
+  color: var(--warn);
+  font-size: 0.76rem;
+}
+.corr-row.asymmetric { background: #fff8e6; border-radius: 6px; }
+
+/* ---------- 计算快照 ---------- */
+.snapshot-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 4px;
+  flex-wrap: wrap;
+}
+.snapshot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+.snapshot {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--muted);
+  border-radius: 8px;
+  background: #fafbfc;
+  padding: 8px 10px;
+}
+.snapshot-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.snapshot-time { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.snapshot-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.snapshot .display-area { margin-top: 0; }

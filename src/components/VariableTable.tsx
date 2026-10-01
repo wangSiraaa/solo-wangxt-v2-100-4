@@ -1,4 +1,4 @@
-// 变量赋值区：自动列出公式中出现的变量，填写数值与单位
+// 变量赋值区：自动列出公式中出现的变量，填写数值、标准不确定度与单位
 import type { VariableDef } from "../engine/types";
 
 interface Props {
@@ -25,7 +25,11 @@ export default function VariableTable({ names, value, onChange }: Props) {
   return (
     <div className="var-table">
       <div className="var-row var-head">
-        <span>变量</span><span>数值</span><span>单位（留空 = 纯数）</span><span />
+        <span>变量</span>
+        <span>数值</span>
+        <span>标准不确定度 u(x)<span className="muted">（同单位；留空 = 未声明）</span></span>
+        <span>单位<span className="muted">（留空 = 纯数）</span></span>
+        <span />
       </div>
       {rows.map((name) => {
         const def = value[name] ?? { value: "", unit: "" };
@@ -39,6 +43,14 @@ export default function VariableTable({ names, value, onChange }: Props) {
               placeholder="如 9.81"
               value={def.value}
               onChange={(e) => set(name, { value: e.target.value })}
+            />
+            <input
+              className="unc-input"
+              inputMode="decimal"
+              placeholder="如 0.05（可留空）"
+              title="标准不确定度 u(x)，与数值使用同一单位；留空表示该测量的不确定度未声明"
+              value={def.uncertainty ?? ""}
+              onChange={(e) => set(name, { uncertainty: e.target.value })}
             />
             <input
               className="unit-input"
@@ -67,4 +79,3 @@ export default function VariableTable({ names, value, onChange }: Props) {
     </div>
   );
 }
-

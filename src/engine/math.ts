@@ -7,7 +7,8 @@ import {
   OperatorNode, ParenthesisNode,
 } from "mathjs";
 import { latexToSource, LatexConvertError } from "./latex";
-import type { AnalysisResult, Issue, VariableDef } from "./types";
+import type { AnalysisResult, CorrelationEntry, Issue, VariableDef } from "./types";
+import { analyzeUncertainty, toUncertaintyNode } from "./uncertainty";
 
 const math: MathJsInstance = create(all);
 
@@ -414,6 +415,7 @@ export function analyzeFormula(
   latex: string,
   varDefs: Record<string, VariableDef>,
   targetUnitText: string,
+  correlations?: CorrelationEntry[],
 ): AnalysisResult {
   if (!latex.trim()) {
     return { status: "empty", variables: [], issues: [] };
@@ -529,6 +531,45 @@ export function analyzeFormula(
   const status: AnalysisResult["status"] =
     errors.length > 0 ? "error" : warnings.length > 0 ? "unverified" : "ok";
 
+  // 8) 测量不确定度传播：仅在普通求值成功（有量、无量纲均可）时进行；
+  //    它有自己独立的状态，绝不改变上面的量纲/除零结论，也不产生 NaN。
+  let uncertainty: AnalysisResult["uncertainty"];
+  if (raw !== SKIPPED && value !== undefined && resultUnit !== undefined) {
+    const s0 = splitQuantity(raw);
+    let targetConverted = false;
+    let targetUnitResolved = "";
+    if (targetUnitText.trim()) {
+      try {
+        if (typeof raw === "number") {
+          math.unit(raw, "rad").to(targetUnitText.trim());
+        } else {
+          raw.to(targetUnitText.trim());
+        }
+        targetConverted = true;
+        targetUnitResolved = targetUnit ?? targetUnitText.trim();
+      } catch {
+        targetConverted = false;
+      }
+    }
+    try {
+      uncertainty = analyzeUncertainty({
+        tree: toUncertaintyNode(tree),
+        variableNames: variables,
+        varDefs,
+        scope,
+        canonical: new Map(),
+        correlations,
+        raw,
+        resultUnit: s0.unit,
+        targetConverted,
+        targetUnit: targetUnitResolved,
+      });
+    } catch {
+      // 传播器自身的任何意外都收敛为“未验证”，不影响普通结果
+      uncertainty = { status: "unverified", issues: ["不确定度传播过程出现意外，已标记为未验证"] };
+    }
+  }
+
   let summary: string;
   if (status === "ok") {
     summary = targetValue !== undefined
@@ -552,6 +593,7 @@ export function analyzeFormula(
     resultUnit,
     targetValue,
     targetUnit,
+    uncertainty,
     summary,
   };
 }
