@@ -51,8 +51,26 @@ export default function App() {
 
   const add = () => setFormulas((fs) => [...fs, makeFormula()]);
 
-  const addExample = (kind: "unit" | "degC" | "angle" | "dimErr" | "divZero") => {
+  const addExample = (kind: "unit" | "degC" | "angle" | "dimErr" | "divZero" | "force" | "forceCorr") => {
     const presets: Record<string, Formula> = {
+      force: makeFormula({
+        latex: "m\\cdot a",
+        note: "牛顿第二定律 F=ma：m、a 独立测量，给出标准不确定度后观察传播",
+        variables: {
+          m: { value: "2", unit: "kg", uncertainty: "0.1" },
+          a: { value: "3", unit: "m/s^2", uncertainty: "0.2" },
+        },
+        targetUnit: "N",
+      }),
+      forceCorr: makeFormula({
+        latex: "m\\cdot a",
+        note: "m、a 来自同一标定来源（默认 ρ=1）：计算值仍为 6 N，但合成不确定度与独立假设不同",
+        variables: {
+          m: { value: "2", unit: "kg", uncertainty: "0.1", source: "同一次标定" },
+          a: { value: "3", unit: "m/s^2", uncertainty: "0.2", source: "同一次标定" },
+        },
+        targetUnit: "N",
+      }),
       unit: makeFormula({
         latex: "v\\cdot t+\\frac{1}{2}a t^{2}",
         note: "匀变速直线运动位移",
@@ -125,12 +143,14 @@ export default function App() {
       <header className="topbar">
         <h1>量纲检查笔记本</h1>
         <p className="subtitle">
-          本地运行 · 数据仅保存在本浏览器（IndexedDB）· 首版支持 + − × ÷、幂与常用单位换算
+          本地运行 · 数据仅保存在本浏览器（IndexedDB v2）· 支持 + − × ÷、幂、常用单位换算与测量不确定度传播（含相关系数/共同来源）
         </p>
         <div className="actions">
           <button type="button" onClick={add}>＋ 新建公式</button>
           <span className="sep" />
           <button type="button" className="ghost" onClick={() => addExample("unit")}>示例：单位运算</button>
+          <button type="button" className="ghost" onClick={() => addExample("force")}>示例：力与不确定度（独立）</button>
+          <button type="button" className="ghost" onClick={() => addExample("forceCorr")}>示例：力与不确定度（同源相关）</button>
           <button type="button" className="ghost" onClick={() => addExample("degC")}>示例：摄氏温标</button>
           <button type="button" className="ghost" onClick={() => addExample("angle")}>示例：角度弧度</button>
           <button type="button" className="ghost" onClick={() => addExample("dimErr")}>示例：量纲错误</button>
@@ -162,6 +182,8 @@ export default function App() {
             <p className="muted small">
               规则：未赋值变量与除零都会明确报错（不会自动取零）；
               摄氏/华氏温标的四则运算、未列出的函数等会标记为「未验证」，需要人工确认。
+              可在变量表填写「标准不确定度 u」和「共同来源」、或展开相关系数矩阵，
+              系统会在四则运算与幂范围内做一阶传播；相关关系不完整/不对称/越界时只把该公式的不确定度标为未验证，不影响其数值结果与其他公式。
             </p>
           </div>
         ) : (

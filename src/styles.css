@@ -201,6 +201,14 @@ input:focus {
   color: var(--muted);
 }
 .var-head span:last-child { grid-column: span 2; }
+
+/* 含不确定度/共同来源列的变量表（6 列：名字/数值/单位/u/来源/删除） */
+.var-head-unc { grid-template-columns: 64px 1fr 1.1fr 1fr 1.2fr 30px; }
+.var-row-unc { grid-template-columns: 64px 1fr 1.1fr 1fr 1.2fr 30px; }
+.var-row-unc .unc-input,
+.var-row-unc .source-input { margin-top: 0; font-size: 0.85rem; }
+.unc-input { color: #0b5cad; }
+.source-input { color: #5a3b9c; }
 .var-name {
   font-family: "Cambria Math", "Times New Roman", serif;
   font-style: italic;
@@ -310,3 +318,165 @@ math-field:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.15);
 }
+
+/* ---------- 相关系数矩阵 ---------- */
+.corr-toggle { margin-top: 8px; }
+.corr-box {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fcfcfe;
+}
+.corr-table {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.corr-table th, .corr-table td {
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  text-align: center;
+  min-width: 64px;
+}
+.corr-table thead th, .corr-table tbody th {
+  background: #f3f5f8;
+  font-family: "Cambria Math", "Times New Roman", serif;
+  font-style: italic;
+}
+.corr-diag { background: #f0f0f0; color: var(--muted); }
+.corr-input {
+  width: 64px;
+  margin: 0;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.corr-input[readonly] {
+  background: #f6f7f9;
+  color: var(--muted);
+  cursor: default;
+}
+
+/* ---------- 测量不确定度面板 ---------- */
+.unc-row .tex-box { display: block; }
+.unc-panel {
+  width: 100%;
+  border-left: 3px solid #0b5cad;
+  background: #f6f9ff;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+.unc-panel.unc-blocked {
+  border-left-color: var(--warn);
+  background: #fff8ef;
+}
+.unc-panel.unc-undeclared {
+  border-left-color: #b8c0cc;
+  background: #f8f9fb;
+}
+.unc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.unc-badge {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #dde9fb;
+  color: #0b4ea2;
+}
+.unc-badge.unc-undeclared { background: #e6e9ee; color: #5d6672; }
+.unc-badge.unc-none { background: #ececec; color: #777; }
+.unc-values { display: flex; flex-wrap: wrap; gap: 18px; margin: 4px 0; }
+.unc-line { display: flex; align-items: baseline; gap: 8px; }
+.unc-label { color: var(--muted); font-size: 0.8rem; }
+.unc-contrib { margin-top: 4px; }
+.unc-subhead { color: var(--muted); font-size: 0.8rem; margin-bottom: 2px; }
+.contrib-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.contrib-list li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 2px 0;
+  font-size: 0.85rem;
+}
+.contrib-cross .contrib-label::before { content: "🔗 "; }
+.contrib-share { font-variant-numeric: tabular-nums; font-weight: 600; color: #0b4ea2; }
+.contrib-share.neg { color: #1f8a5b; }
+.unc-assumption { margin: 4px 0 0; color: #444; }
+.unc-notes { list-style: none; margin: 4px 0 0; padding: 0; }
+.unc-notes li { padding: 1px 0; }
+.unc-blocking li { font-weight: 600; }
+
+/* ---------- 计算快照 ---------- */
+.snap-panel {
+  margin-top: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.snap-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.snap-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.snap-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #fff;
+}
+.snap-item.snap-auto { background: #fbfdff; }
+.snap-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.snap-kind {
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #e4ecf8;
+  color: #23507f;
+}
+.snap-kind.manual { background: #efe6fb; color: #5a3b9c; }
+.snap-status { font-weight: 600; }
+.snap-status.status-ok { color: #1a7f4b; }
+.snap-status.status-unverified { color: var(--warn); }
+.snap-status.status-error { color: var(--err); }
+.snap-meta .mini-btn { margin-left: auto; }
+.snap-rows { display: flex; flex-direction: column; gap: 2px; }
+.snap-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.85rem;
+}
+.snap-row .row-tag {
+  padding: 2px 6px;
+  background: transparent;
+  border: none;
+  font-size: 0.75rem;
+}
+.snap-unc { background: #f6f9ff; border-radius: 4px; }
+.snap-converted { display: inline-flex; align-items: center; gap: 6px; margin-left: 12px; }

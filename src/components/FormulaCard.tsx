@@ -1,10 +1,14 @@
-// 单条公式卡片：输入、变量赋值、原式/替换式/结果三段展示、问题定位
-import { useMemo, useState } from "react";
-import type { Formula, VariableDef } from "../engine/types";
+// 单条公式卡片：输入、变量赋值、原式/替换式/结果三段展示、问题定位、
+// 测量不确定度传播结论，以及持久化的计算快照（auto + manual）
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CalcSnapshot, Correlation, Formula, VariableDef } from "../engine/types";
 import { analyzeFormula } from "../engine/math";
 import MathInput from "./MathInput";
 import Tex from "./Tex";
 import VariableTable from "./VariableTable";
+import CorrelationEditor from "./CorrelationEditor";
+import UncertaintyPanel from "./UncertaintyPanel";
+import SnapshotPanel from "./SnapshotPanel";
 
 interface Props {
   formula: Formula;
@@ -20,15 +24,81 @@ const STATUS_META = {
   empty: { label: "空公式", cls: "empty" },
 } as const;
 
+const MAX_SNAPSHOTS = 20;
+
+/** 决定“最近计算”内容的输入签名：原式/变量/目标单位/相关关系任一变化都另记一次 */
+function signatureOf(f: Formula): string {
+  return JSON.stringify({
+    l: f.latex,
+    v: f.variables,
+    t: f.targetUnit,
+    c: f.correlations ?? [],
+  });
+}
+
+function snapshotFromResult(f: Formula, r: ReturnType<typeof analyzeFormula>, kind: CalcSnapshot["kind"]): CalcSnapshot {
+  return {
+    at: Date.now(),
+    kind,
+    latex: f.latex,
+    source: r.source ?? "",
+    substituted: r.substituted ?? "",
+    originalTex: r.originalTex ?? "",
+    substitutedTex: r.substitutedTex ?? "",
+    // 快照内固化当时的变量副本，后续编辑不会改写历史
+    variables: JSON.parse(JSON.stringify(f.variables)) as Record<string, VariableDef>,
+    targetUnit: f.targetUnit,
+    status: r.status,
+    value: r.value,
+    resultUnit: r.resultUnit,
+    targetValue: r.targetValue,
+    targetUnitConverted: r.targetUnit,
+    uncertainty: r.uncertainty ? JSON.parse(JSON.stringify(r.uncertainty)) : undefined,
+  };
+}
+
 export default function FormulaCard({ formula, index, onChange, onDelete }: Props) {
   const [collapsed, setCollapsed] = useState(false);
+  const [showCorr, setShowCorr] = useState(false);
   const result = useMemo(
-    () => analyzeFormula(formula.latex, formula.variables, formula.targetUnit),
-    [formula.latex, formula.variables, formula.targetUnit],
+    () => analyzeFormula(formula.latex, formula.variables, formula.targetUnit, formula.correlations ?? []),
+    [formula.latex, formula.variables, formula.targetUnit, formula.correlations],
   );
   const meta = STATUS_META[result.status];
 
   const setVars = (variables: Record<string, VariableDef>) => onChange({ variables });
+  const setCorr = (correlations: Correlation[]) => onChange({ correlations });
+
+  // 自动快照：仅当本次分析 status=ok 且输入签名变化时，替换旧的 auto 快照。
+  // 用 ref 记住上次签名，避免把同一次输入的重渲染重复入账。
+  const lastAutoSig = useRef<string | null>(null);
+  const sig = signatureOf(formula);
+  const snapshots = formula.snapshots ?? [];
+
+  useEffect(() => {
+    if (result.status !== "ok") return;
+    if (lastAutoSig.current === sig) return;
+    lastAutoSig.current = sig;
+    const auto = snapshotFromResult(formula, result, "auto");
+    const manuals = (formula.snapshots ?? []).filter((s) => s.kind === "manual");
+    onChange({ snapshots: [auto, ...manuals].slice(0, MAX_SNAPSHOTS) });
+    // 仅在“输入签名/验证状态”变化时落快照；快照数组自身变化不触发，避免自我追打
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig, result.status, result, formula, onChange]);
+
+  const saveManual = () => {
+    const snap = snapshotFromResult(formula, result, "manual");
+    // 同一毫秒内连续留存时避免 key 冲突
+    const lastAt = (formula.snapshots ?? [])[0]?.at ?? 0;
+    if (snap.at <= lastAt) snap.at = lastAt + 1;
+    // manual 保留全部（auto 仍在最前），上限内最旧的手动记录被挤出
+    const next = [snap, ...(formula.snapshots ?? [])].slice(0, MAX_SNAPSHOTS);
+    onChange({ snapshots: next });
+  };
+
+  const deleteSnapshot = (at: number, kind: "manual" | "auto") => {
+    onChange({ snapshots: (formula.snapshots ?? []).filter((s) => !(s.at === at && s.kind === kind)) });
+  };
 
   return (
     <section className={`card status-${meta.cls}`}>
@@ -51,18 +121,32 @@ export default function FormulaCard({ formula, index, onChange, onDelete }: Prop
             <MathInput
               value={formula.latex}
               onChange={(latex) => onChange({ latex })}
-              placeholder="例如  v \\cdot t + \\frac{1}{2} a t^2"
+              placeholder="例如  m \\cdot a"
             />
           </label>
 
           <div className="grid-2">
             <div>
-              <div className="field-label">变量赋值</div>
+              <div className="field-label">
+                变量赋值（可填标准不确定度 u 与共同来源）
+              </div>
               <VariableTable names={result.variables} value={formula.variables} onChange={setVars} />
+              {result.variables.length >= 2 && (
+                <button
+                  type="button"
+                  className="mini-btn corr-toggle"
+                  onClick={() => setShowCorr((v) => !v)}
+                >
+                  {showCorr ? "▾ 收起相关系数矩阵" : "▸ 编辑变量间相关系数 ρ（可选）"}
+                </button>
+              )}
+              {showCorr && result.variables.length >= 2 && (
+                <CorrelationEditor names={result.variables} value={formula.correlations ?? []} onChange={setCorr} />
+              )}
             </div>
             <div>
               <label className="field-label">
-                结果目标单位（可选；用于常用单位换算，如 K、degF、deg、rad、km/h）
+                结果目标单位（可选；用于常用单位换算，如 K、degF、deg、rad、km/h、N）
                 <input
                   className="unit-result-input"
                   list="unit-suggestions"
@@ -75,7 +159,7 @@ export default function FormulaCard({ formula, index, onChange, onDelete }: Prop
                 备注
                 <input
                   value={formula.note}
-                  placeholder="例如：自由落体位移"
+                  placeholder="例如：牛顿第二定律 F = m a"
                   onChange={(e) => onChange({ note: e.target.value })}
                 />
               </label>
@@ -126,8 +210,16 @@ export default function FormulaCard({ formula, index, onChange, onDelete }: Prop
                   )}
                 </div>
               </div>
+              <div className="display-row unc-row">
+                <span className="row-tag">测量不确定度</span>
+                <div className="tex-box">
+                  <UncertaintyPanel result={result} />
+                </div>
+              </div>
             </div>
           )}
+
+          <SnapshotPanel snapshots={snapshots} onSaveManual={saveManual} onDelete={deleteSnapshot} />
 
           {result.issues.length > 0 && (
             <ul className="issue-list">

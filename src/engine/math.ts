@@ -7,7 +7,8 @@ import {
   OperatorNode, ParenthesisNode,
 } from "mathjs";
 import { latexToSource, LatexConvertError } from "./latex";
-import type { AnalysisResult, Issue, VariableDef } from "./types";
+import { propagateUncertainty } from "./uncertainty";
+import type { AnalysisResult, Correlation, Issue, VariableDef } from "./types";
 
 const math: MathJsInstance = create(all);
 
@@ -306,18 +307,24 @@ function evalNode(
 }
 
 function safeArith(fn: () => Quantity, path: number[], node: AnyNode, col: Collectors): EvalVal {
-  let result: Quantity;
+  let result: unknown;
   try {
     result = fn();
   } catch (e) {
     col.add("error", path, node, `运算失败：${(e as Error).message}`);
     return SKIPPED;
   }
-  if (typeof result === "number" && !Number.isFinite(result)) {
+  // 负底数的分数次幂等情况 mathjs 可能返回复数：首版不支持，判为错误，绝不放行 Complex/NaN
+  if (result !== null && typeof result === "object" && !math.isUnit(result)) {
+    col.add("error", path, node, "运算结果不是实数（如负底数的分数次幂会产生复数），首版不支持");
+    return SKIPPED;
+  }
+  const q = result as Quantity;
+  if (typeof q === "number" && !Number.isFinite(q)) {
     col.add("error", path, node, "运算结果不是有限数值（可能由除零引起）");
     return SKIPPED;
   }
-  return result;
+  return q;
 }
 
 export function formatNumber(n: number): string {
@@ -414,6 +421,7 @@ export function analyzeFormula(
   latex: string,
   varDefs: Record<string, VariableDef>,
   targetUnitText: string,
+  correlations: Correlation[] = [],
 ): AnalysisResult {
   if (!latex.trim()) {
     return { status: "empty", variables: [], issues: [] };
@@ -523,6 +531,75 @@ export function analyzeFormula(
     }
   }
 
+  // 8) 测量不确定度传播（与普通求值同源；普通结果语义不因本步骤改变）
+  //    - raw 正常：做一阶传播；相关关系问题/非正定/无法验证结构 → 警告 + unverified
+  //    - raw SKIPPED（摄氏运算、除零等）：不传播，明确标记无法验证，绝不估算
+  //    - 旧笔记没有任何不确定度信息：undeclared，普通结果照常
+  let uncertainty: AnalysisResult["uncertainty"];
+  if (raw !== SKIPPED) {
+    uncertainty = propagateUncertainty({
+      tree,
+      variables,
+      scope,
+      varDefs,
+      correlations,
+      result: raw,
+      resultUnit: resultUnit ?? "",
+      targetUnitText,
+    });
+    // 只有阻塞性说明升级为 warning Issue（说明性提示仅在不确定度面板展示）
+    for (const n of uncertainty.notes) {
+      if (n.blocking) {
+        col.issues.push({ kind: "warning", path: [], snippet: tree.toTex(), message: `不确定度：${n.message}` });
+      }
+    }
+    if (uncertainty.std === undefined && uncertainty.status === "declared") {
+      col.issues.push({
+        kind: "warning", path: [], snippet: tree.toTex(),
+        message: "不确定度：无法按所声明信息验证合成标准不确定度（不输出伪精度；已保留普通计算值）",
+      });
+    }
+  } else {
+    const hasUncertaintyInfo =
+      variables.some((n) => ((varDefs[n] ?? varDefs[n.replace(/_(\d+)$/, "$1")])?.uncertainty ?? "").trim() !== "") ||
+      correlations.some((c) => c.rho.trim() !== "") ||
+      (() => {
+        const counts = new Map<string, number>();
+        for (const n of variables) {
+          const s = (varDefs[n] ?? varDefs[n.replace(/_(\d+)$/, "$1")])?.source?.trim();
+          if (s) counts.set(s, (counts.get(s) ?? 0) + 1);
+        }
+        return [...counts.values()].some((c) => c >= 2);
+      })();
+    if (hasUncertaintyInfo) {
+      uncertainty = {
+        status: "declared",
+        contributions: [],
+        assumption: "相关关系未能进入传播",
+        notes: [{
+          message: "本公式的普通求值已被上方错误/未验证项阻塞，测量不确定度无法传播（普通结果未通过验证，不做任何估算）",
+          blocking: true,
+        }],
+      };
+      col.issues.push({
+        kind: "warning", path: [], snippet: tree.toTex(),
+        message: "不确定度：普通求值未通过验证，无法传播测量不确定度",
+      });
+    } else if (variables.length > 0) {
+      uncertainty = {
+        status: "undeclared",
+        contributions: [],
+        assumption: "未声明任何测量不确定度",
+        notes: [{
+          message: "未声明测量不确定度；且普通求值未通过验证，未做不确定度传播",
+          blocking: false,
+        }],
+      };
+    } else {
+      uncertainty = { status: "none", contributions: [], assumption: "无变量", notes: [] };
+    }
+  }
+
   // 换算新增的 warning 需要反映到状态上
   const errors = col.issues.filter((i) => i.kind === "error");
   const warnings = col.issues.filter((i) => i.kind === "warning");
@@ -552,6 +629,7 @@ export function analyzeFormula(
     resultUnit,
     targetValue,
     targetUnit,
+    uncertainty,
     summary,
   };
 }

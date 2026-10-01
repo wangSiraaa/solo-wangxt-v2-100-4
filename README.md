@@ -1,22 +1,23 @@
 # 量纲检查笔记本（Dimension Notebook）
 
-面向工程教师的**本地**公式笔记工具：输入公式 → 给变量赋数值与单位 → 自动计算并检查常见量纲错误。
+面向工程教师的**本地**公式笔记工具：输入公式 → 给变量赋数值与单位 → 自动计算并检查常见量纲错误，
+并对声明了测量不确定度的变量做**一阶（GUM）误差传播**（支持相关系数/共同来源）。
 无需服务器，数据只保存在浏览器 IndexedDB 中。
 
 - **React 18 + TypeScript** 组织界面与文档
 - **MathLive** 提供所见即所得的数学输入（`+ − × ÷`、幂、分数、括号、希腊字母/下标）
 - **KaTeX** 渲染原式与代入后的计算式（问题节点红/橙色高亮）
 - **mathjs** 负责表达式解析、单位量纲与常用单位换算
-- **IndexedDB** 自动保存，支持 JSON 导出/导入（导出保留可再次编辑的 LaTeX 表达式）
+- **IndexedDB（v2）** 自动保存；v1 旧库自动升级，支持 JSON 导出/导入（v1/v2 文件均可读，导出保留可再次编辑的 LaTeX 表达式、不确定度声明与计算快照）
 
 ## 启动
 
 ```bash
 npm install
-npm run dev       # 本地开发
+npm run dev       # 本地开发（端口 5199）
 npm run build     # 类型检查 + 生产构建到 dist/
-npm test          # 36 个单元测试（引擎 + 导出导入）
-node e2e/smoke.mjs # 25 项真实浏览器端到端检查（需先 npm run dev）
+npm test          # 60 个单元测试（量纲引擎 + 不确定度传播 + 导出导入）
+node e2e/smoke.mjs # 60 项真实浏览器端到端检查（需先 npm run dev）
 ```
 
 ## 首版明确支持的范围
@@ -39,25 +40,52 @@ node e2e/smoke.mjs # 25 项真实浏览器端到端检查（需先 npm run dev�
 7. **公式隔离**：每条公式独立分析、独立持久化，一条公式的任何错误都不会影响其他公式。
 8. **三段展示**：原式 → 替换变量后的计算式 → 结果（含结果单位及可选的目标单位换算值）。导出的 JSON 同时保存 LaTeX（可编辑本体）与中缀表达式（便于备份查看）。
 
+## 测量不确定度分析（一阶 GUM 传播）
+
+在变量表中可声明：
+
+- **标准不确定度 u**（1σ，与数值同单位，留空 = 该量未声明）；
+- **共同来源**（如同一台仪器/同一次标定）：同名来源的变量默认 ρ=1，可被显式系数覆盖；
+- **相关系数矩阵**（可选展开）：ρ ∈ [−1, 1]，编辑器自动镜像保证对称。
+
+系统在 + − × ÷ 与幂（含带不确定度指数的正底数幂）范围内，对 SI 基准值求偏导并按
+
+`u_c² = Σ gᵢ²uᵢ² + 2Σ gᵢgⱼρᵢⱼuᵢuⱼ`
+
+合成，给出**结果标准不确定度（含结果单位与目标单位）、相对不确定度与主要贡献项**（直接项/相关交叉项及方差占比），
+并把结论与普通结果、原式、代入式一起以**计算快照**（自动 + 手动留存）持久化，刷新/导出导入后不丢失。
+
+不确定度的严格语义（与普通数值结果相互独立、不改变既有量纲/除零语义）：
+
+- 旧笔记本没有不确定度信息时，普通结果**照常工作**，仅明确标注「不确定度未声明」，不会在缺信息时按独立量估算；
+- 相关关系**不完整（只有一个方向）、不对称（两方向不一致）、越界（|ρ|>1）或相关矩阵非正定（合成出负方差）**：只把该公式的不确定度标为**未验证**，普通计算值仍然给出，绝不把相关量静默当独立量；
+- 摄氏/华氏读数的不支持运算、含零分母、超出支持范围的表达式：沿用原有未验证/错误语义，不确定度同样不产出数值；
+- 全程不输出 `NaN`/`Infinity` 与伪精度（不确定度数值规整为 6 位有效数字）。
+
 ## 项目结构
 
 ```
 src/
   engine/
-    latex.ts        # MathLive LaTeX → mathjs 中缀表达式（含范围控制）
-    math.ts         # 解析/量纲检查/定位/求值/换算，输出结构化 Issue
-    units.ts        # 首版常用单位清单（输入提示）
-    types.ts        # Formula / AnalysisResult / Issue 类型
-    math.test.ts    # 引擎测试（摄氏、角度、除零、定位、隔离…）
+    latex.ts          # MathLive LaTeX → mathjs 中缀表达式（含范围控制）
+    math.ts           # 解析/量纲检查/定位/求值/换算，输出结构化 Issue
+    uncertainty.ts    # 一阶不确定度传播：偏导、相关矩阵校验、贡献项
+    units.ts          # 首版常用单位清单（输入提示）
+    types.ts          # Formula / AnalysisResult / UncertaintyResult / CalcSnapshot
+    math.test.ts      # 引擎测试（摄氏、角度、除零、定位、隔离…）
+    uncertainty.test.ts # 不确定度验收测试（力/相关/坏关系/隔离/旧记录）
   storage/
-    db.ts           # IndexedDB 封装
-    exchange.ts     # JSON 导出/导入
+    db.ts             # IndexedDB v2 封装（v1 自动升级）
+    exchange.ts       # JSON 导出/导入（v1 兼容、v2 快照/相关清洗）
   components/
-    MathInput.tsx   # MathLive math-field 封装
-    Tex.tsx         # KaTeX 渲染
-    VariableTable.tsx
-    FormulaCard.tsx # 单条公式：输入/赋值/三段展示/问题定位
+    MathInput.tsx     # MathLive math-field 封装
+    Tex.tsx           # KaTeX 渲染
+    VariableTable.tsx # 数值/单位/标准不确定度/共同来源
+    CorrelationEditor.tsx # 对称相关系数矩阵
+    UncertaintyPanel.tsx  # 合成不确定度、贡献项、相关假设、未验证原因
+    SnapshotPanel.tsx # 自动/手动计算快照
+    FormulaCard.tsx   # 单条公式：输入/赋值/三段展示/快照/问题定位
     UnitSuggestions.tsx
   App.tsx  main.tsx  styles.css
-e2e/smoke.mjs       # Playwright 端到端冒烟
+e2e/smoke.mjs         # Playwright 端到端冒烟（60 项）
 ```
